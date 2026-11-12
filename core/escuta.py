@@ -126,8 +126,9 @@ class EscutaContinua:
             pass
 
     def _limiar(self, falando: bool) -> float:
-        base = max(self._ruido * 3.0, 220.0)
-        return max(base, 600.0) if falando else base
+        # Microfones fracos (Realtek) têm ruído ~10 e fala ~100-400: o piso fixo alto engolia a voz.
+        base = max(self._ruido * 4.0, 70.0)
+        return max(base, 400.0) if falando else base
 
     def _proximo_enunciado(
         self, *, espera_max: float | None = None, silencio_fim: float = 0.7, max_dur: float = 14.0,
@@ -186,7 +187,8 @@ class EscutaContinua:
         from core.transcricao import transcrever_audio
 
         try:
-            return transcrever_audio(audio, prompt="Viviane, assistente pessoal.")
+            # Sem initial_prompt: com ruído o Whisper devolve o próprio prompt como se fosse fala.
+            return transcrever_audio(audio, prompt=None)
         except Exception as exc:
             log.warning("Falha ao transcrever: %s", exc)
             self.ultimo_erro = str(exc)
@@ -226,7 +228,7 @@ class EscutaContinua:
             if audio is None:
                 continue
 
-            duracao = len(audio) * SEG_POR_BLOCO
+            duracao = len(audio) / TAXA
             if falando or esta_falando():
                 # É provavelmente a própria voz dela; só interessa um "pare" curtinho.
                 if duracao > 2.5:
@@ -238,9 +240,9 @@ class EscutaContinua:
                 continue
 
             texto = self._transcrever(audio)
+            log.info("Ouvi (%.1fs, ruído %.0f): %r", duracao, self._ruido, texto)
             if not texto or eh_lixo(texto):
                 continue
-            log.info("Ouvi: %r", texto)
 
             chamou, resto = extrair_chamada(texto, self.nome)
             em_conversa = time.time() < self._conversa_ate

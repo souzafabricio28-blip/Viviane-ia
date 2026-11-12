@@ -30,6 +30,21 @@ with open(ERROR_LOG, "a", encoding="utf-8") as f:
     f.write(f"[{datetime.now().isoformat()}] Interface Viviane inicializada\n")
 
 
+def _configurar_log_arquivo() -> None:
+    """Grava o que a escuta ouviu e decidiu em logs/viviane.log (sem janela de console)."""
+    from logging.handlers import RotatingFileHandler
+
+    caminho = os.path.join(_PROJECT_ROOT, "logs", "viviane.log")
+    handler = RotatingFileHandler(caminho, maxBytes=500_000, backupCount=2, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
+    raiz = logging.getLogger("Viviane")
+    raiz.setLevel(logging.INFO)
+    raiz.addHandler(handler)
+
+
+_configurar_log_arquivo()
+
+
 def _log_error(erro: str, contexto: str = "") -> None:
     tb = traceback.format_exc() if contexto else ""
     with open(ERROR_LOG, "a", encoding="utf-8") as f:

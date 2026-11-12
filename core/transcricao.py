@@ -30,14 +30,14 @@ def pre_carregar() -> None:
     _get_model()
 
 
-def transcrever_audio(audio_int16: np.ndarray, prompt: str = "Viviane") -> str:
+def transcrever_audio(audio_int16: np.ndarray, prompt: str | None = "Viviane") -> str:
     """Transcreve um trecho de fala já recortado (PCM 16 kHz mono int16)."""
     audio = audio_int16.astype(np.float32) / 32768.0
     pico = float(np.max(np.abs(audio))) if audio.size else 0.0
     if pico < 1e-4:
         return ""
     # Microfone baixo: normaliza (limitando o ganho para não amplificar ruído de fundo demais)
-    audio = audio * min(8.0, 0.7 / pico)
+    audio = audio * min(40.0, 0.7 / pico)
 
     segments, _ = _get_model().transcribe(
         audio,
