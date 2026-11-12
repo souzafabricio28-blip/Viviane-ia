@@ -266,7 +266,7 @@ def main():
     pygame.init()
     display = (WIDTH, HEIGHT)
     pygame.display.set_mode(display, pygame.DOUBLEBUF | pygame.OPENGL)
-    pygame.display.set_caption("DarkSON - Neural Core 3D")
+    pygame.display.set_caption("Viviane - Neural Core 3D")
     prog = init_gl()
 
     verts = gerar_face()

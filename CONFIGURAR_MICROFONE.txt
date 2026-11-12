@@ -1,4 +1,4 @@
-Olá! Para usar a DarkSON com seu headset, você precisa configurar o microfone no Windows:
+Olá! Para usar a Viviane com seu headset, configure o microfone no Windows:
 
 1. ✅ Conecte o headset no PC
 

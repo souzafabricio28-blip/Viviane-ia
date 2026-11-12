@@ -16,11 +16,23 @@ _CONFIG_KEYS = {
     "groq": ("GROQ_API_KEY",),
     "gemini": ("GEMINI_API_KEY",),
     "ollama": (),
+    "openai": ("OPENAI_BASE_URL",),
+    "openai_compat": ("OPENAI_BASE_URL",),
+    "custom": ("OPENAI_BASE_URL",),
+    "local": ("OPENAI_BASE_URL",),
+    "fallback": ("GROQ_API_KEY", "GEMINI_API_KEY"),
+    "auto": ("GROQ_API_KEY", "GEMINI_API_KEY"),
 }
 
 _REQUIRED_KEYS = {
     "groq": ("GROQ_API_KEY",),
     "gemini": ("GEMINI_API_KEY",),
+    "openai": ("OPENAI_BASE_URL",),
+    "openai_compat": ("OPENAI_BASE_URL",),
+    "custom": ("OPENAI_BASE_URL",),
+    "local": ("OPENAI_BASE_URL",),
+    "fallback": (),
+    "auto": (),
 }
 
 _PLACEHOLDER_PATTERNS = [
@@ -34,8 +46,8 @@ _PLACEHOLDER_PATTERNS = [
 ]
 
 _ENV_KEY_NAMES = [
-    "GROQ_API_KEY", "GEMINI_API_KEY", "REPLICATE_API_KEY",
-    "WEATHER_API_KEY", "NEWS_API_KEY", "DARKSON_API_TOKEN",
+    "GROQ_API_KEY", "GEMINI_API_KEY", "REPLICATE_API_KEY", "OPENAI_API_KEY",
+    "WEATHER_API_KEY", "NEWS_API_KEY", "VIVIANE_API_TOKEN",
 ]
 
 _VOZ_PADRAO = "pt-BR-ThalitaMultilingualNeural"
@@ -46,7 +58,7 @@ class Settings:
     BASE_DIR: ClassVar[Path] = Path(__file__).parent.parent
 
     ai_provider: str = field(
-        default_factory=lambda: environ.get("AI_PROVIDER", "groq")
+        default_factory=lambda: environ.get("AI_PROVIDER", "fallback")
     )
     groq_api_key: str = field(
         default_factory=lambda: environ.get("GROQ_API_KEY", "")
@@ -56,7 +68,7 @@ class Settings:
     )
     language: str = field(default_factory=lambda: environ.get("LANGUAGE", "pt-BR"))
     assistant_name: str = field(
-        default_factory=lambda: environ.get("ASSISTANT_NAME", "DarkSON")
+        default_factory=lambda: environ.get("ASSISTANT_NAME", "Viviane")
     )
     user_name: str = field(
         default_factory=lambda: environ.get("USER_NAME", "Fabricio")
@@ -76,6 +88,15 @@ class Settings:
     ollama_url: str = field(
         default_factory=lambda: environ.get("OLLAMA_URL", "http://localhost:11434")
     )
+    openai_base_url: str = field(
+        default_factory=lambda: environ.get("OPENAI_BASE_URL", "").rstrip("/")
+    )
+    openai_api_key: str = field(
+        default_factory=lambda: environ.get("OPENAI_API_KEY", "")
+    )
+    openai_model: str = field(
+        default_factory=lambda: environ.get("OPENAI_MODEL", "")
+    )
     tts_voice: str = field(
         default_factory=lambda: environ.get("TTS_VOICE", _VOZ_PADRAO)
     )
@@ -89,28 +110,59 @@ class Settings:
         default_factory=lambda: environ.get("TTS_PITCH", "+8Hz")
     )
     api_host: str = field(
-        default_factory=lambda: environ.get("DARKSON_HOST", "127.0.0.1")
+        default_factory=lambda: environ.get("VIVIANE_HOST", "127.0.0.1")
     )
     api_port: int = field(
-        default_factory=lambda: int(environ.get("PORT", environ.get("DARKSON_PORT", "5000")))
+        default_factory=lambda: int(environ.get("PORT", environ.get("VIVIANE_PORT", "5000")))
     )
     api_token: str = field(
-        default_factory=lambda: environ.get("DARKSON_API_TOKEN", "")
+        default_factory=lambda: environ.get("VIVIANE_API_TOKEN", "")
     )
     data_dir: Path = field(
-        default_factory=lambda: Path(environ.get("DARKSON_DATA_DIR", str(Settings.BASE_DIR / "data")))
+        default_factory=lambda: Path(environ.get("VIVIANE_DATA_DIR", str(Settings.BASE_DIR / "data")))
     )
     whisper_model: str = field(
-        default_factory=lambda: environ.get("DARKSON_WHISPER_MODEL", "base")
+        default_factory=lambda: environ.get("VIVIANE_WHISPER_MODEL", "tiny")
     )
     allow_origins: str = field(
         default_factory=lambda: environ.get(
-            "DARKSON_ALLOW_ORIGINS",
-            "https://darkson-ia.onrender.com,https://darkson-ia.onrender.com/",
+            "VIVIANE_ALLOW_ORIGINS",
+            "",
         )
+    )
+    # Wake Word settings
+    wake_word: str = field(
+        default_factory=lambda: environ.get("WAKE_WORD", "oi viviane")
+    )
+    wake_word_engine: str = field(
+        default_factory=lambda: environ.get("WAKE_WORD_ENGINE", "simple")
+    )
+    wake_word_sensitivity: float = field(
+        default_factory=lambda: float(environ.get("WAKE_WORD_SENSITIVITY", "0.6"))
+    )
+    # Safety / platform
+    allow_system_actions: bool = field(
+        default_factory=lambda: environ.get("ALLOW_SYSTEM_ACTIONS", "true").lower() in ("1", "true", "yes", "on")
+    )
+    enable_local_web: bool = field(
+        default_factory=lambda: environ.get("ENABLE_LOCAL_WEB", "false").lower() in ("1", "true", "yes", "on")
+    )
+    # Núcleo / UX
+    speak_responses: bool = field(
+        default_factory=lambda: environ.get("VIVIANE_SPEAK_RESPONSES", "true").lower() in ("1", "true", "yes", "on")
+    )
+    enable_face_recognition: bool = field(
+        default_factory=lambda: environ.get("ENABLE_FACE_RECOGNITION", "true").lower() in ("1", "true", "yes", "on")
+    )
+    enable_continuous_learning: bool = field(
+        default_factory=lambda: environ.get("ENABLE_CONTINUOUS_LEARNING", "true").lower() in ("1", "true", "yes", "on")
+    )
+    local_only: bool = field(
+        default_factory=lambda: environ.get("LOCAL_ONLY", "true").lower() in ("1", "true", "yes", "on")
     )
 
     def __post_init__(self) -> None:
+        aplicar_modo_local(self)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         if self.tts_engine not in ("edge", "sapi"):
             self.tts_engine = "edge"
@@ -145,13 +197,24 @@ class Settings:
 
     def validar(self) -> list[str]:
         erros = []
-        if self.ai_provider not in ("groq", "gemini", "ollama"):
-            erros.append(f"AI_PROVIDER invalido: '{self.ai_provider}'. Use groq, gemini ou ollama.")
+        if self.ai_provider not in ("groq", "gemini", "ollama", "openai", "openai_compat", "custom", "local", "fallback", "auto"):
+            erros.append(f"AI_PROVIDER inválido: '{self.ai_provider}'. Use groq, gemini, ollama, openai, fallback ou auto.")
         required = _REQUIRED_KEYS.get(self.ai_provider, ())
         for k in required:
             if not getattr(self, k.lower(), ""):
-                erros.append(f"{k} nao configurada no .env (necessario para provider '{self.ai_provider}')")
+                erros.append(f"{k} não configurada no .env (necessário para provider '{self.ai_provider}')")
         return erros
+
+
+def aplicar_modo_local(cfg: Settings) -> None:
+    """Enquanto LOCAL_ONLY estiver ligado, nada escuta fora deste computador."""
+    if not cfg.local_only:
+        return
+    host = (cfg.api_host or "").strip().lower()
+    if host not in ("127.0.0.1", "localhost", "::1", ""):
+        print("[LOCAL] Endereço público ignorado. Viviane fica em 127.0.0.1.", file=sys.stderr)
+    cfg.api_host = "127.0.0.1"
+    cfg.allow_origins = ""
 
 
 settings = Settings()

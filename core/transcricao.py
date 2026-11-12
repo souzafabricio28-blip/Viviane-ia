@@ -32,5 +32,13 @@ def transcrever_wav(wav_bytes: bytes) -> str:
         audio = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
 
     model = _get_model()
-    segments, _ = model.transcribe(audio, language="pt", beam_size=5, vad_filter=True)
+    segments, _ = model.transcribe(
+        audio, 
+        language="pt", 
+        beam_size=1,
+        temperature=0.0,
+        vad_filter=False,
+        condition_on_previous_text=False,
+        initial_prompt="oi viviane"
+    )
     return " ".join(seg.text for seg in segments).strip()

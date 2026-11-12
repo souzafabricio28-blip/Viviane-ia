@@ -379,7 +379,7 @@ class Memoria:
         if conversas:
             partes.append("[ULTIMAS CONVERSAS]")
             for c in conversas:
-                prefixo = "USUARIO" if c["role"] == "user" else "DarkSON"
+                prefixo = "USUARIO" if c["role"] == "user" else settings.assistant_name
                 partes.append(f"  {prefixo}: {c['conteudo']}")
             partes.append("")
 

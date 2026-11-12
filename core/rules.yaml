@@ -1,223 +1,617 @@
 intents:
-  # ── Keyword simples -> intent ──────────────────────────────────
-  - name: diagnostico
-    type: keyword
-    words: [temperatura, cpu, "uso do pc", "uso da cpu", diagnostico, "saude do pc", "como esta o pc", "status do pc", desempenho, performance]
-
-  - name: ip_local
-    type: keyword
-    words: ["ip local", "meu ip", "nome do pc", "nome do computador", "endereco de rede", "endereço de rede", "ip da maquina", hostname, "nome da maquina"]
-
-  - name: ip_publico
-    type: keyword
-    words: ["ip publico", "ip público", "ip externo", "ip da internet", "qual meu ip de fora"]
-
-  - name: info_disco
-    type: keyword
-    words: ["espaco em disco", "espaço em disco", "espaco no disco", "quanto espaco", armazenamento, "disco rigido", hd, ssd, "espaco livre", "tamanho do disco"]
-
-  - name: info_so
-    type: keyword
-    words: ["versao do windows", "versão do windows", "versao do sistema", "qual sistema", "qual windows", arquitetura, "qual so", "sistema operacional", "qual versao"]
-
-  - name: info_processos
-    type: keyword
-    words: ["quais processos", "processos em execucao", "programas abertos", "o que esta rodando", "o que esta executando", "lista processos", "quais programas"]
-
-  - name: info_servicos
-    type: keyword
-    words: ["quais servicos", "servicos em execucao", "serviços ativos", "lista servicos"]
-
-  - name: info_rede
-    type: keyword
-    words: ["info rede", "informacoes de rede", conexoes, "status da rede", wifi, conexão, conexao]
-
-  - name: abrir_programa
-    type: prefix
-    prefixes: [abrir, iniciar, executar, rodar, abra]
-    param: programa
-    stopwords: [o, a, de, do, da]
-    exclude: [programa, programas]
-
-  - name: tocar_musica
-    type: keyword
-    words: ["tocar musica", "tocar música", "ouvir musica", "colocar musica", musica, playlist, spotify, "toca uma musica", "bota uma musica"]
-
-  - name: db_status
-    type: keyword
-    words: ["tamanho do banco", "espaco do banco", "espaço do banco", "status do banco", "banco de dados", "monitorar espaco", "monitorar espaço", "tamanho da base", "espaço da base", "tamanho do db", "db tamanho", "quanto espaco tem o banco", "memoria.db", "espaço em disco dark"]
-
-  - name: parar_fala
-    type: keyword
-    words: ["pare de falar", "cala a boca", "silêncio", "silenciar", "para de falar", "para a fala", "chega", "já chega"]
-
-  - name: desligar_assistente
-    type: keyword
-    words: ["desligar dark", "desativar dark", "vá dormir", "va dormir", "vai dormir", "desligar assistente", "desativar assistente", "dark desativar", "dark desligar", "hibernar dark", "fechar dark", "pode desligar", "pode dormir", "encerrar dark"]
-
-  - name: listar_conhecimento
-    type: keyword
-    words: ["o que pode fazer", "o que sabe fazer", "quais sao seus comandos", "quais comandos", "me ajude", ajuda, help, "comandos disponiveis", "o que voce faz", "o que consegue fazer", "como voce funciona", "o que podemos fazer", "mostre comandos"]
-
-  # ── Keyword + extrair parametro ────────────────────────────────
-  - name: previsao_tempo
-    type: extract
-    words: [clima, tempo, previsao, previsão, "como esta o tempo", "vai chover", "temperatura externa"]
-    extract:
-      cidade:
-        marker: "em"
-        pos: last
-        default: "São Paulo"
-        transform: title
-
-  - name: noticias
-    type: extract
-    words: [noticias, "ultimas noticias", destaques, novidades, "o que esta acontecendo"]
-    extract:
-      assunto:
-        marker: "sobre"
-        pos: last
-        default: ""
-
-  # ── Prefixo -> extrair resto ───────────────────────────────────
-  - name: executar_cmd
-    type: prefix
-    prefixes: ["executar ", "rode ", "roda ", "cmd "]
-    param: comando
-
-  - name: buscar_web
-    type: prefix
-    prefixes: ["pesquisar ", "pesquisa ", "pesquise ", "procure ", "busca na internet ", "pesquise sobre ", "pesquisar na web ", "google ", "pesquisar no google ", "buscar no google ", "pesquisar por ", "buscar por ", "buscar na internet ", "busque sobre ", "buscar sobre ", "pesquise na internet "]
-    param: termo
-
-  - name: fetch_page
-    type: prefix
-    prefixes: ["acessar site ", "acesse o site ", "abrir site ", "ler pagina ", "leia a pagina ", "acessar pagina ", "acesse a pagina ", "fetch ", "visite ", "abrir pagina "]
-    param: url
-
-  # ── Conhecimento (prefix + extract) ────────────────────────────
-  - name: salvar_conhecimento
-    type: prefix
-    prefixes: ["guarda isso ", "lembra disso ", "anota ", "registra ", "salva essa ", "guarde ", "lembre ", "grave essa ", "guarde isso ", "grave isso "]
-    param: texto
-
-  - name: buscar_conhecimento
-    type: prefix
-    prefixes: ["o que voce sabe sobre ", "me fale sobre ", "busca na sua base ", "o que sabe sobre ", "pesquise na sua base ", "o que tem sobre ", "informacao sobre ", "informação sobre "]
-    param: termo
-
-  - name: gerar_imagem
-    type: prefix
-    prefixes: ["gerar imagem ", "criar imagem ", "desenhar ", "fazer uma imagem ", "cria uma imagem ", "gera uma ", "desenha um ", "desenha uma ", "imagem de ", "foto de ", "arte de ", "ilustracao ", "crie uma imagem ", "gere uma imagem ", "faca uma imagem "]
-    param: prompt
-
-  - name: lembrete
-    type: prefix
-    prefixes: ["lembrete ", "criar lembrete ", "cria um lembrete ", "me lembre ", "lembra ", "me avise "]
-    param: texto
-    stopwords: [de, para, sobre]
-
-  - name: analisar_ecra
-    type: prefix
-    prefixes: ["analisar ecra ", "analisar ecrã ", "veja a tela ", "olhe a tela ", "o que esta na tela ", "analise a tela ", "veja o ecra ", "analise o ecra "]
-    param: pergunta
-
-  - name: configuracao
-    type: prefix
-    prefixes: ["configuracao ", "configuração ", "abrir configuracao ", "abrir configuração ", "mostrar configuracao ", "mostrar configuração ", "exibir configuracao ", "exibir configuração "]
-    param: pagina
-
-  # ── Audio / Video ───────────────────────────────────────────────
-  - name: audio_devices
-    type: keyword
-    words: ["dispositivos de audio", "dispositivos de áudio", "audio devices", "listar audio", "dispositivos de som", "quais microfones", "quais alto falantes", "fones", "caixas de som"]
-
-  - name: capturar_webcam
-    type: keyword
-    words: ["tirar foto", "webcam", "camera", "câmera", "foto da webcam", "capturar webcam", "selfie", "me veja", "me filmar", "foto minha"]
-
-  - name: gravar_tela
-    type: keyword
-    words: ["gravar tela", "screen record", "gravar ecra", "gravar video da tela", "capturar tela em video"]
-
-  - name: tirar_print
-    type: keyword
-    words: ["tirar print", "capturar tela", "screenshot", "foto da tela", "print da tela", "captura de tela"]
-
-  - name: listar_janelas
-    type: keyword
-    words: ["janelas abertas", "quais janelas", "mostrar janelas", "listar janelas", "aplicacoes abertas", "aplicativos abertos", "o que esta aberto na tela"]
-
-  - name: alternar_janela
-    type: prefix
-    prefixes: ["alternar para ", "mudar para ", "trocar para ", "ir para ", "ativar ", "focar ", "maximizar ", "abrir janela "]
-    param: termo
-    stopwords: [a, o, de, do, da]
-
-  - name: fechar_janela
-    type: prefix
-    prefixes: ["fechar ", "matar ", "encerrar ", "fechar programa ", "fechar app ", "fechar aplicativo "]
-    param: termo
-    stopwords: [a, o, de, do, da]
-    exclude: [janela, programa, aplicativo]
-
-  - name: listar_sessoes_audio
-    type: keyword
-    words: ["sessoes de audio", "sessões de audio", "audio ativo", "aplicativos com som", "volumes ativos", "sessoes de som", "quem esta usando audio"]
-
-  - name: volume_app
-    type: prefix
-    prefixes: ["volume do ", "volume de ", "mutar ", "silenciar ", "ativar som ", "aumentar volume do ", "diminuir volume do "]
-    param: processo
-    stopwords: [o, a, de, do, da]
-
-  - name: programas_abertos
-    type: keyword
-    words: ["programas abertos", "o que esta rodando", "processos ativos", "quais programas estao abertos", "o que esta executando", "lista de programas", "programas em execucao"]
-
-  - name: listar_servicos_windows
-    type: keyword
-    words: ["servicos do windows", "servicos do sistema", "servicos em execucao", "servicos ativos", "quais servicos estao rodando", "status dos servicos"]
-
-  - name: info_hardware
-    type: keyword
-    words: ["info hardware", "informacoes do hardware", "especificacoes do pc", "configuracao do pc", "meu computador", "qual meu hardware", "nucleos cpu", "quantos nucleos", "memoria ram", "quanta ram"]
-
-  - name: controle_servico
-    type: prefix
-    prefixes: ["iniciar servico ", "parar servico ", "reiniciar servico ", "pausar servico ", "iniciar servico ", "stop servico ", "start servico "]
-    param: nome
-    stopwords: [o, a]
-
-  - name: volume_total
-    type: keyword
-    words: ["aumentar volume", "diminuir volume", "mutar", "silenciar", "ativar som", "volume maximo", "volume minimo", "volume 100", "volume 50", "volume total", "volume do sistema"]
-
-  - name: matar_processo
-    type: prefix
-    prefixes: ["matar ", "kill ", "encerrar processo ", "fechar processo "]
-    param: nome
-    stopwords: [o, a]
-    exclude: ["janela", "programa", "aba"]
-
-  - name: ler_registro
-    type: prefix
-    prefixes: ["ler registro ", "registro de ", "regedit ", "chave do registro "]
-    param: chave
-
-  # ── Trabalho ────────────────────────────────────────────────────
-  - name: abrir_programa_vscode
-    type: keyword
-    words: ["vamos trabalhar", "bora trabalhar", "modo trabalho", "vamos codar", trabalhar, programar, codar]
-    params:
-      programa: vscode
-
-  # ── Mapa de serviços web ────────────────────────────────────────
-  - name: abrir_web_service
-    type: keyword
-    words: ["abrir youtube", youtube, "abrir netflix", netflix, "abrir twitch", twitch, "abrir prime"]
-    map:
-      youtube: youtube
-      netflix: netflix
-      twitch: twitch
-      prime: "prime video"
+- name: smarthome_desligar
+  type: keyword
+  words:
+  - desligar luz
+  - apagar luz
+  - apague a luz
+  - desligue a luz
+  - desligar a luz
+  - apagar a luz da
+  - desligar a luz da
+  - desligar a lampada
+  - apagar a lampada
+- name: smarthome_ligar
+  type: keyword
+  words:
+  - ligar luz
+  - acender luz
+  - acenda a luz
+  - ligar a luz
+  - ligar a lampada
+  - acenda a lampada
+  - ligar a lampada da
+  - acender a lampada da
+- name: smarthome_brilho
+  type: extract
+  words:
+  - brilho da luz
+  - luminosidade da luz
+  - brilho da lampada
+  - luminosidade da lampada
+  - intensidade da luz
+  - aumentar o brilho
+  - diminuir o brilho
+  - brilho da sala
+  - luminosidade da sala
+  - brilho
+  - luminosidade
+  - intensidade
+  extract:
+    luminosidade:
+      marker: '%'
+      pos: before
+      default: 50%
+      transform: raw
+- name: smarthome_temperatura
+  type: extract
+  words:
+  - temperatura do ar
+  - temperatura do ar condicionado
+  - climatizador
+  - ar condicionado
+  - temperatura do quarto
+  - temperatura da sala
+  - aquecimento
+  - resfriamento
+  - temperatura ambiente
+  - temperatura
+  extract:
+    temperatura:
+      marker: graus
+      pos: before
+      default: '22'
+      transform: raw
+- name: smarthome_cena
+  type: keyword
+  words:
+  - modo cinema
+  - cena cinema
+  - cena filme
+  - modo filme
+  - cena dormir
+  - modo dormir
+  - boa noite casa
+  - cena manha
+  - modo manha
+  - cena acordar
+  - modo acordar
+  - cena jantar
+  - modo jantar
+- name: smarthome_desligar_tudo
+  type: keyword
+  words:
+  - apagar tudo
+  - desligar tudo
+  - desligar todas as luzes
+  - apagar todas as luzes
+  - tudo off
+  - tudo desligado
+- name: smarthome_dispositivos
+  type: keyword
+  words:
+  - dispositivos da casa
+  - luzes da casa
+  - dispositivos inteligentes
+  - casa inteligente status
+  - status da casa
+  - dispositivos conectados
+- name: diagnostico
+  type: keyword
+  words:
+  - cpu
+  - uso do pc
+  - uso da cpu
+  - diagnostico
+  - saude do pc
+  - como esta o pc
+  - status do pc
+  - desempenho
+  - performance
+  - temperatura do pc
+  - temperatura cpu
+  - temperatura do processador
+- name: ip_publico
+  type: keyword
+  words:
+  - ip externo
+  - ip da internet
+  - qual meu ip de fora
+  - ip público
+- name: info_disco
+  type: keyword
+  words:
+  - espaco em disco
+  - espaco em disco
+  - espaco no disco
+  - quanto espaco
+  - armazenamento
+  - disco rigido
+  - hd
+  - ssd
+  - espaco livre
+  - tamanho do disco
+- name: info_so
+  type: keyword
+  words:
+  - versao do windows
+  - versao do windows
+  - versao do sistema
+  - qual sistema
+  - qual windows
+  - arquitetura
+  - qual so
+  - sistema operacional
+  - qual versao
+- name: info_processos
+  type: keyword
+  words:
+  - quais processos
+  - processos em execucao
+  - programas abertos
+  - o que esta rodando
+  - o que esta executando
+  - lista processos
+  - quais programas
+- name: info_servicos
+  type: keyword
+  words:
+  - quais servicos
+  - servicos em execucao
+  - servicos ativos
+  - lista servicos
+- name: info_rede
+  type: keyword
+  words:
+  - info rede
+  - informacoes de rede
+  - conexoes
+  - status da rede
+  - wifi
+  - conexao
+  - conexao
+- name: abrir_programa
+  type: prefix
+  prefixes:
+  - abrir
+  - iniciar
+  - executar
+  - rodar
+  - abra
+  param: programa
+  stopwords:
+  - o
+  - a
+  - de
+  - do
+  - da
+  exclude:
+  - programa
+  - programas
+- name: tocar_musica
+  type: keyword
+  words:
+  - tocar musica
+  - tocar musica
+  - ouvir musica
+  - colocar musica
+  - musica
+  - playlist
+  - spotify
+  - toca uma musica
+  - bota uma musica
+- name: db_status
+  type: keyword
+  words:
+  - tamanho do banco
+  - espaco do banco
+  - espaco do banco
+  - status do banco
+  - banco de dados
+  - monitorar espaco
+  - monitorar espaco
+  - tamanho da base
+  - espaco da base
+  - tamanho do db
+  - db tamanho
+  - quanto espaco tem o banco
+  - memoria.db
+  - espaco em disco dark
+- name: parar_fala
+  type: keyword
+  words:
+  - pare de falar
+  - cala a boca
+  - silencio
+  - silenciar
+  - para de falar
+  - para a fala
+  - chega
+  - ja chega
+- name: desligar_assistente
+  type: keyword
+  words:
+  - desligar dark
+  - desativar dark
+  - va dormir
+  - va dormir
+  - vai dormir
+  - desligar assistente
+  - desativar assistente
+  - dark desativar
+  - dark desligar
+  - hibernar dark
+  - fechar dark
+  - pode desligar
+  - pode dormir
+  - encerrar dark
+- name: listar_conhecimento
+  type: keyword
+  words:
+  - o que pode fazer
+  - o que sabe fazer
+  - quais sao seus comandos
+  - quais comandos
+  - me ajude
+  - ajuda
+  - help
+  - comandos disponiveis
+  - o que voce faz
+  - o que consegue fazer
+  - como voce funciona
+  - o que podemos fazer
+  - mostre comandos
+- name: previsao_tempo
+  type: extract
+  words:
+  - clima
+  - tempo
+  - previsao
+  - previsao
+  - como esta o tempo
+  - vai chover
+  - temperatura externa
+  extract:
+    cidade:
+      marker: em
+      pos: last
+      default: Sao Paulo
+      transform: title
+- name: noticias
+  type: extract
+  words:
+  - noticias
+  - ultimas noticias
+  - destaques
+  - novidades
+  - o que esta acontecendo
+  extract:
+    assunto:
+      marker: sobre
+      pos: last
+      default: ''
+- name: executar_cmd
+  type: prefix
+  prefixes:
+  - 'executar '
+  - 'rode '
+  - 'roda '
+  - 'cmd '
+  param: comando
+- name: buscar_web
+  type: prefix
+  prefixes:
+  - 'pesquisar '
+  - 'pesquisa '
+  - 'pesquise '
+  - 'procure '
+  - 'busca na internet '
+  - 'pesquise sobre '
+  - 'pesquisar na web '
+  - 'google '
+  - 'pesquisar no google '
+  - 'buscar no google '
+  - 'pesquisar por '
+  - 'buscar por '
+  - 'buscar na internet '
+  - 'busque sobre '
+  - 'buscar sobre '
+  - 'pesquise na internet '
+  param: termo
+- name: fetch_page
+  type: prefix
+  prefixes:
+  - 'acessar site '
+  - 'acesse o site '
+  - 'abrir site '
+  - 'ler pagina '
+  - 'leia a pagina '
+  - 'acessar pagina '
+  - 'acesse a pagina '
+  - 'fetch '
+  - 'visite '
+  - 'abrir pagina '
+  param: url
+- name: salvar_conhecimento
+  type: prefix
+  prefixes:
+  - 'guarda isso '
+  - 'lembra disso '
+  - 'anota '
+  - 'registra '
+  - 'salva essa '
+  - 'guarde '
+  - 'lembre '
+  - 'grave essa '
+  - 'guarde isso '
+  - 'grave isso '
+  param: texto
+- name: buscar_conhecimento
+  type: prefix
+  prefixes:
+  - 'o que voce sabe sobre '
+  - 'me fale sobre '
+  - 'busca na sua base '
+  - 'o que sabe sobre '
+  - 'pesquise na sua base '
+  - 'o que tem sobre '
+  - 'informacao sobre '
+  - 'informacao sobre '
+  param: termo
+- name: gerar_imagem
+  type: prefix
+  prefixes:
+  - 'gerar imagem '
+  - 'criar imagem '
+  - 'desenhar '
+  - 'fazer uma imagem '
+  - 'cria uma imagem '
+  - 'gera uma '
+  - 'desenha um '
+  - 'desenha uma '
+  - 'imagem de '
+  - 'foto de '
+  - 'arte de '
+  - 'ilustracao '
+  - 'crie uma imagem '
+  - 'gere uma imagem '
+  - 'faca uma imagem '
+  param: prompt
+- name: lembrete
+  type: prefix
+  prefixes:
+  - 'lembrete '
+  - 'criar lembrete '
+  - 'cria um lembrete '
+  - 'me lembre '
+  - 'lembra '
+  - 'me avise '
+  param: texto
+  stopwords:
+  - de
+  - para
+  - sobre
+- name: analisar_ecra
+  type: prefix
+  prefixes:
+  - 'analisar ecra '
+  - 'analisar ecra '
+  - 'veja a tela '
+  - 'olhe a tela '
+  - 'o que esta na tela '
+  - 'analise a tela '
+  - 'veja o ecra '
+  - 'analise o ecra '
+  param: pergunta
+- name: configuracao
+  type: prefix
+  prefixes:
+  - 'configuracao '
+  - 'configuracao '
+  - 'abrir configuracao '
+  - 'abrir configuracao '
+  - 'mostrar configuracao '
+  - 'mostrar configuracao '
+  - 'exibir configuracao '
+  - 'exibir configuracao '
+  param: pagina
+- name: audio_devices
+  type: keyword
+  words:
+  - dispositivos de audio
+  - dispositivos de audio
+  - audio devices
+  - listar audio
+  - dispositivos de som
+  - quais microfones
+  - quais alto falantes
+  - fones
+  - caixas de som
+- name: capturar_webcam
+  type: keyword
+  words:
+  - tirar foto
+  - webcam
+  - camera
+  - camera
+  - foto da webcam
+  - capturar webcam
+  - selfie
+  - me veja
+  - me filmar
+  - foto minha
+- name: gravar_tela
+  type: keyword
+  words:
+  - gravar tela
+  - screen record
+  - gravar ecra
+  - gravar video da tela
+  - capturar tela em video
+- name: tirar_print
+  type: keyword
+  words:
+  - tirar print
+  - capturar tela
+  - screenshot
+  - foto da tela
+  - print da tela
+  - captura de tela
+- name: listar_janelas
+  type: keyword
+  words:
+  - janelas abertas
+  - quais janelas
+  - mostrar janelas
+  - listar janelas
+  - aplicacoes abertas
+  - aplicativos abertos
+  - o que esta aberto na tela
+- name: alternar_janela
+  type: prefix
+  prefixes:
+  - 'alternar para '
+  - 'mudar para '
+  - 'trocar para '
+  - 'ir para '
+  - 'ativar '
+  - 'focar '
+  - 'maximizar '
+  - 'abrir janela '
+  param: termo
+  stopwords:
+  - a
+  - o
+  - de
+  - do
+  - da
+- name: fechar_janela
+  type: prefix
+  prefixes:
+  - 'fechar '
+  - 'matar '
+  - 'encerrar '
+  - 'fechar programa '
+  - 'fechar app '
+  - 'fechar aplicativo '
+  param: termo
+  stopwords:
+  - a
+  - o
+  - de
+  - do
+  - da
+  exclude:
+  - janela
+  - programa
+  - aplicativo
+- name: listar_sessoes_audio
+  type: keyword
+  words:
+  - sessoes de audio
+  - sessoes de audio
+  - audio ativo
+  - aplicativos com som
+  - volumes ativos
+  - sessoes de som
+  - quem esta usando audio
+- name: volume_app
+  type: prefix
+  prefixes:
+  - 'volume do '
+  - 'volume de '
+  - 'mutar '
+  - 'silenciar '
+  - 'ativar som '
+  - 'aumentar volume do '
+  - 'diminuir volume do '
+  param: processo
+  stopwords:
+  - o
+  - a
+  - de
+  - do
+  - da
+- name: programas_abertos
+  type: keyword
+  words:
+  - programas abertos
+  - o que esta rodando
+  - processos ativos
+  - quais programas estao abertos
+  - o que esta executando
+  - lista de programas
+  - programas em execucao
+- name: listar_servicos_windows
+  type: keyword
+  words:
+  - servicos do windows
+  - servicos do sistema
+  - servicos em execucao
+  - servicos ativos
+  - quais servicos estao rodando
+  - status dos servicos
+- name: info_hardware
+  type: keyword
+  words:
+  - info hardware
+  - informacoes do hardware
+  - especificacoes do pc
+  - configuracao do pc
+  - meu computador
+  - qual meu hardware
+  - nucleos cpu
+  - quantos nucleos
+  - memoria ram
+  - quanta ram
+- name: controle_servico
+  type: prefix
+  prefixes:
+  - 'iniciar servico '
+  - 'parar servico '
+  - 'reiniciar servico '
+  - 'pausar servico '
+  - 'iniciar servico '
+  - 'stop servico '
+  - 'start servico '
+  param: nome
+  stopwords:
+  - o
+  - a
+- name: volume_total
+  type: keyword
+  words:
+  - aumentar volume
+  - diminuir volume
+  - mutar
+  - silenciar
+  - ativar som
+  - volume maximo
+  - volume minimo
+  - volume 100
+  - volume 50
+  - volume total
+  - volume do sistema
+- name: matar_processo
+  type: prefix
+  prefixes:
+  - 'matar '
+  - 'kill '
+  - 'encerrar processo '
+  - 'fechar processo '
+  param: nome
+  stopwords:
+  - o
+  - a
+  exclude:
+  - janela
+  - programa
+  - aba
+- name: ler_registro
+  type: prefix
+  prefixes:
+  - 'ler registro '
+  - 'registro de '
+  - 'regedit '
+  - 'chave do registro '
+  param: chave

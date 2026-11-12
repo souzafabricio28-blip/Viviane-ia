@@ -1,12 +1,11 @@
 @echo off
-title DarkSON - Instalador
+title Viviane - Instalador
 cd /d "%~dp0"
 
 echo ========================================
-echo     DarkSON - Instalador
+echo     Viviane - instalacao local
 echo ========================================
 echo.
-echo Verificando requisitos...
 
 where python >nul 2>&1
 if %ERRORLEVEL% neq 0 (
@@ -32,7 +31,7 @@ if exist "venv" (
 )
 
 echo.
-echo Instalando dependencias (pode levar varios minutos)...
+echo Instalando dependencias. Isso pode levar varios minutos...
 call "venv\Scripts\pip.exe" install --upgrade pip -q
 call "venv\Scripts\pip.exe" install -r requirements.txt
 if %ERRORLEVEL% neq 0 (
@@ -43,12 +42,8 @@ if %ERRORLEVEL% neq 0 (
 echo [OK] Dependencias instaladas
 
 if not exist ".env" (
-    echo AI_PROVIDER=ollama> .env
-    echo OLLAMA_MODEL=minimax-m3:cloud>> .env
-    echo OLLAMA_URL=http://localhost:11434>> .env
-    echo USER_NAME=Fabricio>> .env
-    echo LANGUAGE=pt-BR>> .env
-    echo [OK] .env padrao criado
+    copy /Y ".env.example" ".env" >nul
+    echo [OK] .env criado a partir do exemplo. Coloque suas chaves de API.
 ) else (
     echo [OK] .env ja existe
 )
@@ -56,19 +51,16 @@ if not exist ".env" (
 echo.
 echo Criando atalho no Desktop...
 set "DESKTOP=%USERPROFILE%\Desktop"
-copy /Y "iniciar.bat" "%DESKTOP%\DarkSON.bat" >nul
-echo [OK] Atalho criado: %%DESKTOP%%\DarkSON.bat
+copy /Y "run_viviane.bat" "%DESKTOP%\Viviane.bat" >nul
+echo [OK] Atalho: %DESKTOP%\Viviane.bat
 
 echo.
 echo ========================================
-echo  Instalacao concluida!
+echo  Instalacao concluida
 echo ========================================
 echo.
-echo Para iniciar o DarkSON:
-echo   1. De um duplo clique em 'DarkSON.bat' no Desktop
-echo   2. Ou execute 'rodar_darkson.bat' nesta pasta
-echo.
-echo IMPORTANTE: Certifique-se de que o Ollama esta rodando!
-echo   Execute 'ollama serve' no terminal antes de iniciar.
+echo A Viviane roda somente neste computador.
+echo Duplo clique em Viviane.bat na area de trabalho,
+echo ou execute iniciar.bat nesta pasta.
 echo.
 pause

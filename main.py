@@ -1,6 +1,6 @@
 """
-DarkSON - Assistente de Voz Inteligente
-Suporta: Groq, Gemini, Ollama
+Viviane - Assistente local de voz
+Provedores: Groq, Gemini, Ollama ou um endpoint na própria máquina.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ def main() -> None:
 
     if provider == "groq" and not settings.groq_api_key:
         print("=" * 60)
-        print("  DarkSON - Assistente de Voz Inteligente")
+        print("  Viviane - Assistente local")
         print("=" * 60)
         print()
         print("  ERRO: Chave da API Groq não configurada!")
@@ -36,7 +36,7 @@ def main() -> None:
 
     assistente = Assistente()
     print("=" * 60)
-    print("  DarkSON - Modo Voz (console)")
+    print(f"  {settings.assistant_name} - Modo voz neste computador")
     print("  Fale um comando ou pressione Ctrl+C para sair")
     print("=" * 60)
     try:

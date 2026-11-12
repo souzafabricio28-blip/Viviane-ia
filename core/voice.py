@@ -18,7 +18,7 @@ import numpy as np
 from core.amplitude import set_amplitude, reset as reset_amplitude
 from core.settings import settings
 
-log = logging.getLogger("DarkSON")
+log = logging.getLogger("Viviane")
 
 _tts_lock = threading.Lock()
 _stop_event = threading.Event()
@@ -157,9 +157,9 @@ def _gerar_mp3_edge(texto: str, saida: str | None = None) -> str | None:
     tmp_mp3.close()
     destino = saida or tmp_mp3.name
     try:
-        edge_tts_path = os.path.join(os.path.dirname(_sys.executable), "edge-tts.exe")
+        edge_tts_path = os.path.join(os.path.dirname(_sys.executable), "Scripts", "edge-tts.exe")
         if not os.path.exists(edge_tts_path):
-            edge_tts_path = os.path.join(os.path.dirname(_sys.executable), "edge-tts")
+            edge_tts_path = os.path.join(os.path.dirname(_sys.executable), "Scripts", "edge-tts")
         if not os.path.exists(edge_tts_path):
             edge_tts_path = "edge-tts"
 
@@ -232,7 +232,7 @@ def falar(texto: str) -> None:
         except Exception as e:
             import traceback
             try:
-                with open("D:\\DarkSON\\voice_errors.log", "a", encoding="utf-8") as f:
+                with open("", "a", encoding="utf-8") as f:
                     f.write(f"Error speaking: {e}\n{traceback.format_exc()}\n")
             except Exception:
                 pass
