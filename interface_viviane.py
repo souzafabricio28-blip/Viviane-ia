@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import threading
+import time
 import tkinter as tk
 import traceback
 from datetime import datetime
@@ -357,8 +358,7 @@ _CHAVES_ENV = {
     "tts_engine": "TTS_ENGINE",
     "allow_system_actions": "ALLOW_SYSTEM_ACTIONS",
     "enable_local_web": "ENABLE_LOCAL_WEB",
-    "wake_word": "WAKE_WORD",
-    "wake_word_engine": "WAKE_WORD_ENGINE",
+    "mic_continuo": "VIVIANE_MIC_ATIVO",
 }
 
 
@@ -402,10 +402,9 @@ class SettingsDialog(ctk.CTkToplevel):
         self._switch_row(scroll, "Painel web neste PC (127.0.0.1)", "enable_local_web",
                          getattr(settings, "enable_local_web", False))
 
-        self._section(scroll, "WAKE WORD")
-        self._entry_row(scroll, "Palavra-chave", "wake_word", getattr(settings, "wake_word", "oi viviane"))
-        self._combobox_row(scroll, "Engine", "wake_word_engine", ["simple", "openwakeword", "vosk"],
-                           getattr(settings, "wake_word_engine", "simple"))
+        self._section(scroll, "MICROFONE")
+        self._switch_row(scroll, "Microfone sempre ligado (diga \"Viviane\")", "mic_continuo",
+                         getattr(settings, "mic_continuo", True))
 
         ctk.CTkLabel(
             self, text="Provedor, modelo e voz valem por completo depois de reiniciar a Viviane.",
@@ -513,7 +512,7 @@ class VivianeApp(ctk.CTk):
         self.thread_mic = None
         self._busy = False
         self._settings_dialog = None
-        self._listening = False
+        self.escuta = None
         self.nucleo = NucleoVisual()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -526,7 +525,6 @@ class VivianeApp(ctk.CTk):
         self._build_ui()
         self._set_status("Inicializando assistente...", self.colors["warn"])
         self.after(200, self._init_assistente)
-        self._start_wake_word()
 
     def _fit_to_screen(self) -> None:
         self.update_idletasks()
@@ -550,23 +548,64 @@ class VivianeApp(ctk.CTk):
         self.geometry(f"{w}x{h}+{x}+{y}")
         self.minsize(min(900, sw - 40), min(560, area_h - 70))
 
-    # ── Wake word ──────────────────────────────────────────────────────
+    # ── Microfone sempre ligado ────────────────────────────────────────
 
-    def _start_wake_word(self) -> None:
-        try:
-            from core.skills.wake_word import wake_word_manager
-            wake_word_manager.set_activation_callback(self._on_wake_word)
-            wake_word_manager.start()
-            self._set_status("Ouvindo... diga 'oi viviane'", self.colors["success"])
-        except Exception as e:
-            _log_error(str(e), "wake_word_start")
+    def _iniciar_escuta(self) -> None:
+        if self.escuta is not None:
+            return
+        from core.escuta import EscutaContinua
 
-    def _on_wake_word(self, keyword: str) -> None:
-        self.after(0, self.nucleo.brilhar)
-        self.after(0, lambda: self._set_status("Escutando seu comando...", self.colors["success"]))
-        self.after(0, lambda: self._add_message("Viviane", "O que posso fazer por você?", is_assistant=True))
-        self.after(0, lambda: self.entry_box.focus_set())
-        self.after(0, lambda: self._set_busy(False, "Aguardando comando...", self.colors["success"]))
+        self.escuta = EscutaContinua(
+            ao_estado=self._escuta_estado,
+            ao_chamar=self._escuta_chamar,
+            ao_comando=self._escuta_comando,
+        )
+
+        def preparar() -> None:
+            try:
+                self.after(0, lambda: self._set_status("Preparando reconhecimento de voz...", self.colors["warn"]))
+                from core.transcricao import pre_carregar
+                pre_carregar()
+            except Exception as exc:
+                _log_error(str(exc), "pre_carregar_whisper")
+                self.after(0, lambda: self._set_status("Reconhecimento de voz indisponível", self.colors["danger"]))
+                self.escuta = None
+                return
+            self.after(0, self.escuta.iniciar)
+
+        threading.Thread(target=preparar, daemon=True).start()
+
+    def _escuta_estado(self, estado: str) -> None:
+        mapa = {
+            "ouvindo": ("Ouvindo... diga Viviane", self.colors["success"]),
+            "chamada": ("Sim? Estou ouvindo", self.colors["accent"]),
+            "transcrevendo": ("Entendendo...", self.colors["warn"]),
+            "sem_microfone": ("Microfone indisponível", self.colors["danger"]),
+        }
+        if estado not in mapa:
+            return
+        texto, cor = mapa[estado]
+        self.after(0, lambda: None if self._busy else self._set_status(texto, cor))
+
+    def _escuta_chamar(self) -> None:
+        """Roda na thread da escuta: responde 'Sim, Fabricio. O que deseja?' e só volta ao terminar de falar."""
+        nome = getattr(settings, "user_name", "") or "usuário"
+        frase = f"Sim, {nome}. O que deseja?"
+        self.after(0, lambda: self._add_message("Viviane", frase, is_assistant=True))
+        self.nucleo.brilhar()
+        if getattr(settings, "speak_responses", True):
+            from core.voice import falar
+            falar(frase)
+
+    def _escuta_comando(self, texto: str) -> None:
+        """Roda na thread da escuta: executa o pedido e espera a resposta terminar de ser falada."""
+        pronto = threading.Event()
+        self.after(0, lambda: self.enviar_comando(texto, ao_terminar=pronto.set, limpar_entrada=False))
+        pronto.wait(180)
+        time.sleep(0.4)
+        from core.voice import esta_falando
+        while esta_falando():
+            time.sleep(0.1)
 
     # ── Construção da UI ──────────────────────────────────────────────
 
@@ -650,7 +689,7 @@ class VivianeApp(ctk.CTk):
         rodape = ctk.CTkFrame(self.left, fg_color="transparent")
         rodape.pack(fill="x", padx=18, pady=(0, 10))
         self.voice_btn = ctk.CTkButton(
-            rodape, text="◉  FALAR", height=40, corner_radius=0,
+            rodape, text="○  MIC DESLIGADO", height=40, corner_radius=0,
             fg_color="#06303C", hover_color="#0A4A5E", border_width=1, border_color=c["accent"],
             text_color=c["accent"], font=_fonte(14, True), command=self._voz_ou_parar,
         )
@@ -822,7 +861,7 @@ class VivianeApp(ctk.CTk):
         def worker() -> None:
             try:
                 self.after(0, lambda: self._set_status("Carregando módulos...", self.colors["warn"]))
-                self.assistente = Assistente()
+                self.assistente = Assistente(usar_wake_word=False)
                 self.after(0, self._on_ready)
             except Exception as e:
                 msg = f"Falha ao iniciar: {str(e)[:120]}"
@@ -836,11 +875,13 @@ class VivianeApp(ctk.CTk):
         self._iniciar_servidor_flask()
         self._set_status("Pronta para ajudar", self.colors["success"])
         nome = getattr(settings, "user_name", "") or "usuário"
-        saudacao = (
-            f"Olá, {nome}! Estou pronta. Posso conversar, responder e executar ações permitidas no seu computador."
-        )
+        saudacao = f"Olá, {nome}! Estou pronta. É só dizer Viviane quando precisar."
         self._add_message("Viviane", saudacao, is_assistant=True)
         self._falar_texto(saudacao)
+        if getattr(settings, "mic_continuo", True):
+            self._iniciar_escuta()
+        else:
+            self._set_status("Microfone desligado (use o botão)", self.colors["muted"])
 
     # ── Chat ───────────────────────────────────────────────────────────
 
@@ -892,15 +933,27 @@ class VivianeApp(ctk.CTk):
             return False
 
     def _voz_ou_parar(self) -> None:
+        """Falando: para a fala. Quieta: liga/desliga o microfone sempre ativo."""
         if self._falando():
             self._parar_fala()
+            return
+        if self.escuta is None:
+            self._iniciar_escuta()
+        elif self.escuta.ligado:
+            self.escuta.pausar()
+            self._set_status("Microfone desligado", self.colors["muted"])
         else:
-            self.ouvir_microfone()
+            self.escuta.retomar()
+            self._set_status("Ouvindo... diga Viviane", self.colors["success"])
+        self._atualizar_botao_voz()
 
     def _atualizar_botao_voz(self) -> None:
-        if self._listening:
-            return
-        texto = "■  PARAR" if self._falando() else "◉  FALAR"
+        if self._falando():
+            texto = "■  PARAR"
+        elif self.escuta is not None and self.escuta.ligado:
+            texto = "●  MIC LIGADO"
+        else:
+            texto = "○  MIC DESLIGADO"
         if self.voice_btn.cget("text") != texto:
             self.voice_btn.configure(text=texto)
 
@@ -982,7 +1035,6 @@ class VivianeApp(ctk.CTk):
         self._busy = busy
         state = "disabled" if busy else "normal"
         self.send_button.configure(state=state)
-        self.voice_btn.configure(state=state)
         self.clear_input_btn.configure(state=state)
         self.entry_box.configure(state=state)
         if status:
@@ -990,26 +1042,38 @@ class VivianeApp(ctk.CTk):
 
     # ── Entrada de texto ───────────────────────────────────────────────
 
-    def enviar_comando(self, texto=None) -> None:
+    def enviar_comando(self, texto=None, ao_terminar=None, limpar_entrada: bool = True) -> None:
+        """Envia um pedido (digitado ou falado). `ao_terminar` roda quando a resposta já foi mostrada."""
+
+        def terminar() -> None:
+            if ao_terminar:
+                ao_terminar()
+
         if self.assistente is None:
             self._add_message("Sistema", "Aguarde, a assistente ainda está inicializando.", is_error=True)
+            terminar()
             return
         if texto is None:
             texto = self._entry_text()
         if not texto:
+            terminar()
             return
 
         from core.actions.atalhos import eh_comando_parar
         if eh_comando_parar(texto):
             self._parar_fala()
-            self._clear_input()
+            if limpar_entrada:
+                self._clear_input()
             self._add_message("Você", texto, is_user=True)
             self._add_message("Sistema", "Parei de falar.")
+            terminar()
             return
         if self._busy:
+            terminar()
             return
 
-        self._clear_input()
+        if limpar_entrada:
+            self._clear_input()
         self._add_message("Você", texto, is_user=True)
         typing = self._add_typing()
         self._set_busy(True, "Processando...", self.colors["accent"])
@@ -1029,47 +1093,12 @@ class VivianeApp(ctk.CTk):
                 self._add_message("Viviane", texto_fala, is_assistant=True)
                 self._falar_texto(texto_fala)
                 self._set_busy(False, "Pronta para ajudar", self.colors["success"])
+                terminar()
 
             self.after(0, done)
 
         self.thread_ia = threading.Thread(target=worker, daemon=True)
         self.thread_ia.start()
-
-    # ── Entrada de voz ─────────────────────────────────────────────────
-
-    def ouvir_microfone(self) -> None:
-        if self.assistente is None or self._busy or self._listening:
-            return
-        self._listening = True
-        self._set_busy(True, "Ouvindo pelo microfone...", self.colors["warn"])
-        self._add_message("Sistema", "Escutando... fale seu comando.")
-
-        def worker() -> None:
-            err = ""
-            try:
-                texto = self.assistente.voz.ouvir_comando()
-            except Exception as e:
-                texto = None
-                err = str(e)
-                _log_error(err, "ouvir_microfone exception")
-
-            def done() -> None:
-                self._listening = False
-                self._set_busy(False, "Pronta para ajudar", self.colors["success"])
-                if texto:
-                    self.entry_box.delete("1.0", "end")
-                    self.entry_box.insert("1.0", texto)
-                    self.enviar_comando()
-                else:
-                    msg = "Não captei áudio ou não foi possível transcrever."
-                    if err:
-                        msg += f" ({err[:80]})"
-                    self._add_message("Sistema", msg, is_error=True)
-
-            self.after(0, done)
-
-        self.thread_mic = threading.Thread(target=worker, daemon=True)
-        self.thread_mic.start()
 
     # ── Servidor Flask ─────────────────────────────────────────────────
 
@@ -1093,6 +1122,11 @@ class VivianeApp(ctk.CTk):
             _log_error("Falha ao iniciar servidor web", "web_server_init")
 
     def _on_close(self) -> None:
+        try:
+            if self.escuta:
+                self.escuta.parar()
+        except Exception:
+            pass
         self.parar()
         self.destroy()
 

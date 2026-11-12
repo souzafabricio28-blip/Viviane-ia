@@ -11,6 +11,7 @@ from core.actions.atalhos import eh_comando_parar, parar_tudo, resolver_atalho
 from core.actions.context import ActionContext
 from core.actions.dispatch import dispatch
 from core.conhecimento import BaseConhecimento
+from core.skills.catalogo_pc import registrar_comandos_pc
 from core.conversa import registrar
 from core.llm.brain import Cerebro, _reclassificar_como_sistema, _tem_recusa
 from core.memoria import memoria as db_memoria
@@ -35,7 +36,7 @@ def _desligar_tudo() -> None:
 
 
 class Assistente:
-    def __init__(self, *, modo_web: bool = False) -> None:
+    def __init__(self, *, modo_web: bool = False, usar_wake_word: bool = True) -> None:
         self.modo_web = modo_web
         self.cerebro = Cerebro()
         self.voz = GravadorVoz()
@@ -46,6 +47,7 @@ class Assistente:
         self.diagnostico = DiagnosticoSistema()
         self.info_sistema = InfoSistema()
         self.conhecimento = BaseConhecimento()
+        registrar_comandos_pc(self.conhecimento)
         self.ativo = True
         self._ultima_fala = 0.0
         self._wake_word_ativo = False
@@ -65,7 +67,7 @@ class Assistente:
             log.debug("Nucleo nao iniciou: %s", exc)
 
         # Wake word - apenas no modo console (não web)
-        if not modo_web and wake_word_manager.enabled:
+        if not modo_web and usar_wake_word and wake_word_manager.enabled:
             wake_word_manager.set_activation_callback(self._on_wake_word)
             wake_word_manager.start()
             self._wake_word_ativo = True
@@ -78,7 +80,7 @@ class Assistente:
         self.thread_varredura.start()
         self._loop_principal()
 
-    def _on_wake_word(self):
+    def _on_wake_word(self, keyword: str = ""):
         """Callback quando wake word é detectada."""
         if not self.ativo:
             return

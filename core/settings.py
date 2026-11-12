@@ -151,6 +151,9 @@ class Settings:
     speak_responses: bool = field(
         default_factory=lambda: environ.get("VIVIANE_SPEAK_RESPONSES", "true").lower() in ("1", "true", "yes", "on")
     )
+    mic_continuo: bool = field(
+        default_factory=lambda: environ.get("VIVIANE_MIC_ATIVO", "true").lower() in ("1", "true", "yes", "on")
+    )
     enable_face_recognition: bool = field(
         default_factory=lambda: environ.get("ENABLE_FACE_RECOGNITION", "true").lower() in ("1", "true", "yes", "on")
     )

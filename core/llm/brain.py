@@ -107,7 +107,7 @@ _FUNCOES_DISPONIVEIS = {
     "listar_servicos_windows": "Lista todos os servicos do Windows e seus status.",
     "controle_servico": "Inicia, para, reinicia ou pausa um servico do Windows. Parametros: nome do servico, acao (iniciar/parar/reiniciar).",
     "ler_registro": "Le uma chave ou valor do Registro do Windows. Ex: 'ler registro HKLM\\Software\\Microsoft\\Windows\\CurrentVersion'.",
-    "volume_total": "Controla o volume geral do sistema (aumentar, diminuir, mutar, ativar).",
+    "volume_total": "Controla o volume geral do sistema (aumentar, diminuir, mutar, ativar, ou definir um valor: 'volume em 50%', 'deixe o volume em 100%').",
     "info_hardware": "Mostra informacoes do hardware: sistema operacional, CPU, RAM.",
     "matar_processo": "Encerra um processo pelo nome. Ex: 'matar chrome', 'fechar notepad.exe'.",
     "verificar_programa": "Verifica se um programa especifico esta em execucao no computador. Ex: 'youtube esta aberto', 'chrome esta rodando', 'verificar estado do youtube'.",

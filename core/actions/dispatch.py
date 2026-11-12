@@ -372,7 +372,12 @@ def _volume_total(ctx: ActionContext) -> str:
         else:
             return "Erro: API de áudio não suportada"
         atual = volume.GetMasterVolumeLevelScalar()
-        comando = ctx.comando
+        comando = ctx.comando.lower()
+        nivel = re.search(r"(\d{1,3})\s*(?:%|por\s*cento)?", comando)
+        if nivel and not any(p in comando for p in ("aumentar", "diminuir", "abaixar")):
+            novo = max(0, min(100, int(nivel.group(1)))) / 100
+            volume.SetMasterVolumeLevelScalar(novo, None)
+            return f"Volume ajustado para {novo:.0%}"
         if "aumentar" in comando:
             novo = min(1.0, atual + 0.1)
             volume.SetMasterVolumeLevelScalar(novo, None)

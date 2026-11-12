@@ -482,7 +482,7 @@ class ControladorPC:
             "jogos": "D:\\Jogos",
         }
         for chave, pasta in substituicoes.items():
-            if caminho_lower == chassis:
+            if caminho_lower == chave:
                 caminho = os.path.join(pasta_home, pasta)
                 break
             if caminho_lower.startswith(chave + "\\") or caminho_lower.startswith(chave + "/"):
@@ -535,9 +535,7 @@ class ControladorPC:
             falar(f"Nao encontrei configuracao para {pagina}.")
             db_memoria.registrar_comando("configuracao", pagina, "Nao mapeado", success=False)
 
-    @staticmethod
-    def _mapear_configuracao(pagina: str) -> str | None:
-        M = {
+    CONFIGURACOES: dict[str, str] = {
             "wifi": "ms-settings:network-wifi",
             "bluetooth": "ms-settings:bluetooth",
             "tela": "ms-settings:display",
@@ -578,8 +576,11 @@ class ControladorPC:
             "recuperacao": "ms-settings:recovery",
             "solucao de problemas": "ms-settings:troubleshoot",
             "energia": "ms-settings:powersleep",
-        }
-        return M.get(pagina.lower().strip())
+    }
+
+    @staticmethod
+    def _mapear_configuracao(pagina: str) -> str | None:
+        return ControladorPC.CONFIGURACOES.get(pagina.lower().strip())
 
     # ── JANELAS ───────────────────────────────────────────────────
     def listar_janelas(self) -> list[dict]:
