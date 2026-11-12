@@ -40,7 +40,8 @@ goto menu
 cls
 echo Iniciando Viviane - janela...
 echo.
-python interface_viviane.py
+start "" wscript //nologo "%~dp0iniciar_viviane.vbs"
+goto menu
 pause
 goto menu
 

@@ -1,4 +1,5 @@
 @echo off
-cd /d %~dp0
-start Viviane pythonw.exe interface_viviane.py
-if errorlevel 1 start Viviane python interface_viviane.py
+cd /d "%~dp0"
+rem Sobe a janela sem deixar o prompt aberto.
+start "" wscript //nologo "%~dp0iniciar_viviane.vbs"
+exit /b 0

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 from pathlib import Path
@@ -8,6 +9,17 @@ from pathlib import Path
 from core.settings import settings
 
 _lock = threading.Lock()
+
+_PALAVRAS_VAZIAS = frozenset({
+    "que", "qual", "quais", "quem", "como", "onde", "quando", "por", "para", "pra",
+    "com", "sem", "uma", "uns", "umas", "dos", "das", "nos", "nas", "mais", "muito",
+    "sobre", "fale", "falar", "diga", "explica", "explique", "pesquise", "pesquisa",
+    "busque", "busca", "procure", "sabe", "voce", "você", "viviane", "eh", "foi",
+    "ser", "são", "sao", "tem", "ter", "isso", "esse", "essa", "este", "esta",
+    "internet", "web", "resumo", "resuma", "resumir", "dê", "dar", "mim", "ele", "ela",
+    "eles", "elas", "uma", "algo", "coisa", "preciso", "quero", "gostaria", "favor",
+    "the", "and",
+})
 
 
 class BaseConhecimento:
@@ -112,6 +124,32 @@ class BaseConhecimento:
                 cursor = conn.execute("INSERT INTO blocos (nome) VALUES (?)", (bloco_nome.strip(),))
                 bloco_id = cursor.lastrowid
 
+            existente = conn.execute(
+                "SELECT id, titulo, conteudo, tags FROM topicos WHERE bloco_id = ? AND lower(titulo) = lower(?)",
+                (bloco_id, titulo.strip()),
+            ).fetchone()
+            if existente:
+                antigo_id, antigo_titulo, antigo_conteudo, antigo_tags = existente
+                tags_novas = ", ".join(dict.fromkeys(
+                    t.strip() for t in f"{antigo_tags},{tags}".split(",") if t.strip()
+                ))
+                conn.execute(
+                    "INSERT INTO topicos_fts(topicos_fts, rowid, titulo, conteudo, tags) "
+                    "VALUES('delete', ?, ?, ?, ?)",
+                    (antigo_id, antigo_titulo, antigo_conteudo, antigo_tags),
+                )
+                conn.execute(
+                    """UPDATE topicos SET conteudo = ?, tags = ?, fonte = ?,
+                       updated_at = CURRENT_TIMESTAMP WHERE id = ?""",
+                    (conteudo.strip(), tags_novas, fonte.strip(), antigo_id),
+                )
+                conn.execute(
+                    "INSERT INTO topicos_fts (rowid, titulo, conteudo, tags) VALUES (?, ?, ?, ?)",
+                    (antigo_id, antigo_titulo, conteudo.strip(), tags_novas),
+                )
+                conn.commit()
+                return antigo_id
+
             cursor = conn.execute(
                 """INSERT INTO topicos (bloco_id, titulo, conteudo, tags, fonte)
                    VALUES (?, ?, ?, ?, ?)""",
@@ -126,28 +164,60 @@ class BaseConhecimento:
             conn.commit()
             return row_id
 
+    @staticmethod
+    def palavras_chave(termo: str) -> list[str]:
+        palavras = re.findall(r"\w+", (termo or "").lower())
+        return [p for p in palavras if len(p) > 2 and p not in _PALAVRAS_VAZIAS]
+
     def buscar(self, termo: str, limite: int = 5) -> list[dict]:
+        chaves = self.palavras_chave(termo)
+        if not chaves:
+            return []
+        select = """SELECT t.id, t.titulo, t.conteudo, b.nome, t.tags,
+                           t.fonte, t.created_at, t.access_count"""
         with _lock, sqlite3.connect(str(self.arquivo)) as conn:
-            try:
+            rows = []
+            # Todas as palavras precisam aparecer; sem isso "animal" sozinho traria lixo.
+            for operador in ("AND", "OR"):
+                if operador == "OR" and len(chaves) < 3:
+                    break
+                consulta = f" {operador} ".join(f'"{c}"' for c in chaves)
+                try:
+                    rows = conn.execute(
+                        f"""{select}
+                           FROM topicos_fts f
+                           JOIN topicos t ON f.rowid = t.id
+                           JOIN blocos b ON t.bloco_id = b.id
+                           WHERE topicos_fts MATCH ?
+                           ORDER BY rank
+                           LIMIT ?""",
+                        (consulta, limite),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    rows = []
+                if rows and operador == "AND":
+                    break
+                if operador == "OR" and rows:
+                    # No OR exige ao menos 2/3 das palavras para contar como relevante.
+                    minimo = max(2, (len(chaves) * 2 + 2) // 3)
+                    rows = [
+                        r for r in rows
+                        if sum(c in f"{r[1]} {r[2]} {r[4]}".lower() for c in chaves) >= minimo
+                    ]
+            if not rows:
+                like = " AND ".join(
+                    "(lower(t.titulo) LIKE ? OR lower(t.conteudo) LIKE ? OR lower(t.tags) LIKE ?)"
+                    for _ in chaves
+                )
+                args: list = []
+                for c in chaves:
+                    args += [f"%{c}%"] * 3
                 rows = conn.execute(
-                    """SELECT t.id, t.titulo, t.conteudo, b.nome, t.tags,
-                              t.fonte, t.created_at, t.access_count
-                       FROM topicos_fts f
-                       JOIN topicos t ON f.rowid = t.id
-                       JOIN blocos b ON t.bloco_id = b.id
-                       WHERE topicos_fts MATCH ?
-                       ORDER BY rank
-                       LIMIT ?""",
-                    (termo, limite),
-                ).fetchall()
-            except sqlite3.OperationalError:
-                rows = conn.execute(
-                    """SELECT t.id, t.titulo, t.conteudo, b.nome, t.tags,
-                              t.fonte, t.created_at, t.access_count
+                    f"""{select}
                        FROM topicos t JOIN blocos b ON t.bloco_id = b.id
-                       WHERE t.titulo LIKE ? OR t.conteudo LIKE ? OR t.tags LIKE ?
+                       WHERE {like}
                        LIMIT ?""",
-                    (f"%{termo}%", f"%{termo}%", f"%{termo}%", limite),
+                    (*args, limite),
                 ).fetchall()
 
             resultados = []

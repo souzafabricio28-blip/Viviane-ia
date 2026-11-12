@@ -36,11 +36,11 @@ def _abrir_programa(ctx: ActionContext) -> str:
 
 
 def _buscar_web(ctx: ActionContext) -> str:
-    from core.skills.web_search import buscar_web
+    from core.skills.saber import pesquisar_e_resumir
 
-    termo = ctx.params.get("termo", ctx.comando)
-    ctx.falar(f"Pesquisando sobre {termo}.")
-    return buscar_web(termo)
+    termo = ctx.params.get("termo") or ctx.params.get("query") or ctx.comando
+    ctx.falar("Pesquisando na internet.")
+    return pesquisar_e_resumir(ctx.comando, ctx.cerebro, termo=termo)
 
 
 def _fetch_page(ctx: ActionContext) -> str:
@@ -52,8 +52,8 @@ def _fetch_page(ctx: ActionContext) -> str:
 
 
 def _previsao(ctx: ActionContext) -> str:
-    cidade = ctx.params.get("cidade", "São Paulo")
-    return ctx.clima.obter_previsao(cidade)
+    cidade = ctx.params.get("cidade") or "São Paulo"
+    return ctx.clima.obter_previsao(cidade, falar_resultado=False)
 
 
 def _noticias(ctx: ActionContext) -> str:
@@ -119,8 +119,11 @@ def _info(ctx: ActionContext) -> str:
     return mapa[ctx.intent]()
 
 
-def _executar_cmd(ctx: ActionContext) -> str:
-    cmd = ctx.params.get("comando") or ctx.comando
+def _executar_cmd(ctx: ActionContext) -> str | None:
+    cmd = (ctx.params.get("comando") or ctx.comando).strip()
+    if not ctx.pc.comando_valido(cmd):
+        log.info("executar_cmd ignorado, não é comando: %r", cmd)
+        return None
     resultado = ctx.pc.executar_comando(cmd)
     if resultado:
         return f"Comando executado. {resultado[:200]}"
@@ -168,12 +171,10 @@ def _salvar_conhecimento(ctx: ActionContext) -> str:
 
 
 def _buscar_conhecimento(ctx: ActionContext) -> str:
+    from core.skills.saber import saber
+
     termo = ctx.params.get("termo") or ctx.params.get("assunto") or ctx.comando
-    resultados = ctx.conhecimento.buscar(termo)
-    if resultados:
-        item = resultados[0]
-        return f"[{item['bloco']}] {item['titulo']}: {item['conteudo'][:500]}"
-    return f"Nada encontrado sobre {termo}."
+    return saber(ctx.comando, ctx.conhecimento, ctx.cerebro, ctx.falar, termo=termo)
 
 
 def _listar_conhecimento(ctx: ActionContext) -> str:
@@ -560,4 +561,6 @@ def dispatch(intent: str, ctx: ActionContext) -> str | None:
         return None
     ctx.intent = intent
     resultado = handler(ctx)
+    if resultado is None and intent == "executar_cmd":
+        return None
     return resultado if isinstance(resultado, str) else ""

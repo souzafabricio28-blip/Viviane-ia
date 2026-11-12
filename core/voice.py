@@ -49,31 +49,50 @@ def _gerar_envelope(duracao: float, passos: int = 25) -> list[float]:
     return envelope
 
 
+_CREATE_NO_WINDOW = 0x08000000
+
+
+def _encurtar_para_fala(texto: str, limite: int = 480) -> str:
+    if len(texto) <= limite:
+        return texto
+    corte = texto[:limite]
+    ponto = max(corte.rfind(". "), corte.rfind("! "), corte.rfind("? "))
+    if ponto > 60:
+        return corte[: ponto + 1]
+    espaco = corte.rfind(" ")
+    return (corte[:espaco] if espaco > 40 else corte) + "."
+
+
 def _falar_via_powershell(texto: str) -> None:
     global _current_proc
     texto_limpo = texto.replace("'", "''")
-    voz_config = settings.tts_voice
     ps_script = (
         "Add-Type -AssemblyName System.Speech; "
         "$v = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
         "$vozSel = $null; "
-        "foreach ($voz in $v.GetInstalledVoices()) { "
-        '  $nome = $voz.VoiceInfo.Name; '
-        f'  if ($nome -eq "{voz_config}") {{ $vozSel = $nome; break }} '
-        "} "
-        'if (-not $vozSel) { '
+        "$preferidas = @('Maria','Francisca','Heloisa','Thalita'); "
+        "foreach ($pref in $preferidas) { "
         "  foreach ($voz in $v.GetInstalledVoices()) { "
-        '    $nome = $voz.VoiceInfo.Name; '
-        '    if ($nome -match "Antonio|Daniel|Brazil|Portuguese") { $vozSel = $nome; break } '
+        "    $nome = $voz.VoiceInfo.Name; "
+        "    if ($nome -like ('*' + $pref + '*')) { $vozSel = $nome; break } "
+        "  }; "
+        "  if ($vozSel) { break } "
+        "}; "
+        "if (-not $vozSel) { "
+        "  foreach ($voz in $v.GetInstalledVoices()) { "
+        "    $nome = $voz.VoiceInfo.Name; "
+        "    if ($nome -match 'Portuguese|Brazil|Brasil') { $vozSel = $nome; break } "
         "  } "
-        "} "
-        'if ($vozSel) { $v.SelectVoice($vozSel) }; '
+        "}; "
+        "if ($vozSel) { $v.SelectVoice($vozSel) }; "
+        "$v.Rate = 1; "
         "$v.Speak('" + texto_limpo + "')"
     )
     proc = subprocess.Popen(
-        ["powershell", "-NoProfile", "-Command", ps_script],
+        ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        creationflags=_CREATE_NO_WINDOW,
     )
     with _proc_lock:
         _current_proc = proc
@@ -103,47 +122,45 @@ def _tocar_com_amplitude(texto: str, engine: str = "") -> None:
     t_amp = threading.Thread(target=_amplitude_thread, daemon=True)
     t_amp.start()
 
-    if engine == "edge":
-        _falar_via_edge(texto)
-    else:
-        _falar_via_powershell(texto)
-
-
-def _falar_via_edge(texto: str) -> None:
-    """Gera audio com edge-tts CLI e reproduz via winmm PlaySound (Windows)."""
-    import sys as _sys
-
-    if _sys.platform != "win32":
-        gerar_tts_bytes(texto)
+    if engine == "edge" and _falar_via_edge(texto):
         return
+    _falar_via_powershell(texto)
 
+
+def _tocar_mp3_windows(caminho: str) -> bool:
+    """Reproduz MP3 sem abrir janela. Devolve False se o áudio não tocar."""
     import ctypes
-    import soundfile as sf
-    from ctypes import wintypes
+
+    alias = f"viviane{int(time.time() * 1000)}"
+    winmm = ctypes.windll.winmm
+    abrir = winmm.mciSendStringW(f'open "{caminho}" type mpegvideo alias {alias}', None, 0, None)
+    if abrir != 0:
+        return False
+    try:
+        tocou = winmm.mciSendStringW(f"play {alias} wait", None, 0, None)
+        return tocou == 0
+    finally:
+        winmm.mciSendStringW(f"close {alias}", None, 0, None)
+
+
+def _falar_via_edge(texto: str) -> bool:
+    """Gera áudio neural e reproduz. Devolve False para cair na voz do Windows."""
+    if sys.platform != "win32":
+        return bool(gerar_tts_bytes(texto))
 
     tmp_mp3 = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
-    tmp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
     tmp_mp3.close()
-    tmp_wav.close()
     try:
         mp3_path = _gerar_mp3_edge(texto, tmp_mp3.name)
         if not mp3_path:
-            return
-
-        data, sr = sf.read(tmp_mp3.name)
-        if data.size == 0:
-            return
-        sf.write(tmp_wav.name, data, sr)
-
-        import winsound
-        winsound.PlaySound(tmp_wav.name, winsound.SND_FILENAME)
+            return False
+        return _tocar_mp3_windows(mp3_path)
+    except Exception as exc:
+        log.warning("Voz neural indisponível: %s", exc)
+        return False
     finally:
         try:
             os.unlink(tmp_mp3.name)
-        except Exception:
-            pass
-        try:
-            os.unlink(tmp_wav.name)
         except Exception:
             pass
 
@@ -170,6 +187,7 @@ def _gerar_mp3_edge(texto: str, saida: str | None = None) -> str | None:
              "--text", texto,
              "--write-media", destino],
             capture_output=True, timeout=30,
+            creationflags=_CREATE_NO_WINDOW if sys.platform == "win32" else 0,
         )
         if proc.returncode != 0 or not os.path.exists(destino) or os.path.getsize(destino) == 0:
             if saida is None:
@@ -223,19 +241,16 @@ def _limpar_texto_tts(texto: str) -> str:
 def falar(texto: str) -> None:
     if not texto:
         return
-    texto = _limpar_texto_tts(texto)
+    texto = _encurtar_para_fala(_limpar_texto_tts(texto))
+    if not texto:
+        return
     with _tts_lock:
         try:
             _stop_event.clear()
             engine = settings.tts_engine
             _tocar_com_amplitude(texto, engine)
         except Exception as e:
-            import traceback
-            try:
-                with open("", "a", encoding="utf-8") as f:
-                    f.write(f"Error speaking: {e}\n{traceback.format_exc()}\n")
-            except Exception:
-                pass
+            log.warning("Falha ao falar: %s", e)
             raise
 
 

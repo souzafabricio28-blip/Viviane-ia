@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from datetime import datetime, timedelta
 from urllib.parse import quote
@@ -61,6 +62,83 @@ def _traduzir_condicao(desc: str) -> str:
     return CONDICOES_PT.get(desc.lower(), desc)
 
 
+# Códigos WMO usados pelo Open-Meteo (serviço gratuito, sem chave)
+_WMO_PT = {
+    0: "céu limpo", 1: "predomínio de sol", 2: "parcialmente nublado", 3: "nublado",
+    45: "nevoeiro", 48: "nevoeiro com geada",
+    51: "garoa leve", 53: "garoa", 55: "garoa forte",
+    56: "garoa congelante", 57: "garoa congelante forte",
+    61: "chuva leve", 63: "chuva moderada", 65: "chuva forte",
+    66: "chuva congelante", 67: "chuva congelante forte",
+    71: "neve leve", 73: "neve", 75: "neve forte", 77: "grãos de neve",
+    80: "pancadas de chuva leves", 81: "pancadas de chuva", 82: "pancadas de chuva fortes",
+    85: "pancadas de neve", 86: "pancadas de neve fortes",
+    95: "tempestade", 96: "tempestade com granizo", 99: "tempestade com granizo forte",
+}
+
+
+def _limpar_cidade(cidade: str) -> str:
+    """'Sao Paulo?' / 'são paulo, SP.' -> 'Sao Paulo' / 'são paulo' (só o nome da cidade)."""
+    nome = (cidade or "").split(",")[0]
+    nome = re.sub(r"[^\w\s'\-]", " ", nome, flags=re.UNICODE)
+    nome = re.sub(r"^(?:em|na|no|de|do|da)\s+", "", nome.strip(), flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", nome).strip() or "São Paulo"
+
+
+def _open_meteo(sessao: requests.Session, cidade: str, dias: int = 1) -> tuple[str, str]:
+    """Devolve (texto, erro). Sem chave de API: geocodifica e consulta o Open-Meteo."""
+    nome = _limpar_cidade(cidade)
+    geo = sessao.get(
+        "https://geocoding-api.open-meteo.com/v1/search",
+        params={"name": nome, "count": 5, "language": "pt", "format": "json"},
+        timeout=8,
+    ).json()
+    locais = geo.get("results") or []
+    if not locais:
+        return "", f"Não encontrei a cidade {nome}. Tente outro nome."
+    local = next((x for x in locais if x.get("country_code") == "BR"), locais[0])
+
+    resp = sessao.get(
+        "https://api.open-meteo.com/v1/forecast",
+        params={
+            "latitude": local["latitude"], "longitude": local["longitude"],
+            "current": "temperature_2m,apparent_temperature,relative_humidity_2m,"
+                       "weather_code,wind_speed_10m,pressure_msl",
+            "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,"
+                     "precipitation_probability_max,weather_code",
+            "timezone": "auto", "wind_speed_unit": "ms", "forecast_days": max(1, dias),
+        },
+        timeout=8,
+    )
+    dados = resp.json()
+    if resp.status_code != 200 or "current" not in dados:
+        return "", "O serviço de clima não respondeu agora. Tente de novo em instantes."
+
+    atual, diario = dados["current"], dados["daily"]
+    lugar = local["name"] + (f", {local['admin1']}" if local.get("admin1") else "")
+    if dias > 1:
+        linhas = [f"Previsão para {lugar}:"]
+        for i in range(min(dias, len(diario["time"]))):
+            dia = datetime.strptime(diario["time"][i], "%Y-%m-%d").strftime("%d/%m")
+            cond = _WMO_PT.get(diario["weather_code"][i], "tempo variável")
+            chuva = diario["precipitation_probability_max"][i]
+            extra = f", {chuva}% de chuva" if chuva else ""
+            linhas.append(
+                f"  {dia}: {diario['temperature_2m_min'][i]:.0f}°/{diario['temperature_2m_max'][i]:.0f}°C, {cond}{extra}"
+            )
+        return "\n".join(linhas), ""
+
+    cond = _WMO_PT.get(atual["weather_code"], "tempo variável")
+    chuva = diario["precipitation_probability_max"][0]
+    texto = (
+        f"Em {lugar}: {atual['temperature_2m']:.0f}°C (sensação {atual['apparent_temperature']:.0f}°C), "
+        f"{cond}. Hoje entre {diario['temperature_2m_min'][0]:.0f}° e {diario['temperature_2m_max'][0]:.0f}°C"
+        + (f", {chuva}% de chance de chuva" if chuva else "")
+        + f". Umidade {atual['relative_humidity_2m']}%, vento {atual['wind_speed_10m']:.1f} m/s."
+    )
+    return texto, ""
+
+
 class PrevisaoTempo:
     def __init__(self) -> None:
         self.api_key = settings.weather_api_key
@@ -75,16 +153,40 @@ class PrevisaoTempo:
         except Exception:
             pass
 
+    def _previsao_gratis(self, cidade: str, dias: int, falar_resultado: bool) -> str:
+        """Open-Meteo: funciona sem WEATHER_API_KEY."""
+        chave = (_limpar_cidade(cidade).lower(), dias)
+        em_cache = _CACHE.get(f"om:{chave}")
+        if em_cache and time.time() - em_cache[1] < _CACHE_TTL:
+            texto = em_cache[0]["texto"]
+        else:
+            try:
+                texto, erro = _open_meteo(self._sessao, cidade, dias)
+            except requests.ConnectionError:
+                texto, erro = "", "Sem conexão com a internet para obter a previsão."
+            except requests.Timeout:
+                texto, erro = "", "O serviço do clima demorou muito para responder."
+            except Exception as exc:
+                log.warning("Open-Meteo falhou: %s", exc)
+                texto, erro = "", "Não consegui obter a previsão agora."
+            if erro:
+                if falar_resultado:
+                    self._falar_async(erro)
+                return erro
+            _CACHE[f"om:{chave}"] = ({"texto": texto}, time.time())
+
+        registrar("assistente", f"[Clima] {texto}")
+        if falar_resultado:
+            self._falar_async(texto.split("\n")[0] if dias == 1 else f"Previsão dos próximos {dias} dias na tela.")
+        return texto
+
     def obter_previsao(self, cidade: str = "", falar_resultado: bool = True) -> str:
         """Previsão atual."""
         if not cidade:
             cidade = self._cidade_padrao
 
         if not self.api_key:
-            msg = "Previsão do tempo não disponível. Configure WEATHER_API_KEY no .env (openweathermap.org)"
-            if falar_resultado:
-                self._falar_async(msg)
-            return msg
+            return self._previsao_gratis(cidade, 1, falar_resultado)
 
         cidade_norm = cidade.strip().title()
         agora = time.time()
@@ -108,10 +210,7 @@ class PrevisaoTempo:
                     self._falar_async(msg)
                 return msg
             if resp.status_code == 401:
-                msg = "Chave da API do clima inválida (openweathermap.org)"
-                if falar_resultado:
-                    self._falar_async(msg)
-                return msg
+                return self._previsao_gratis(cidade_norm, 1, falar_resultado)
             if resp.status_code != 200:
                 msg = f"Erro ao obter clima: {dados.get('message', 'erro desconhecido')}"
                 if falar_resultado:
@@ -157,10 +256,7 @@ class PrevisaoTempo:
             cidade = self._cidade_padrao
 
         if not self.api_key:
-            msg = "Configure WEATHER_API_KEY no .env"
-            if falar_resultado:
-                self._falar_async(msg)
-            return msg
+            return self._previsao_gratis(cidade, 5, falar_resultado)
 
         cidade_norm = cidade.strip().title()
         try:

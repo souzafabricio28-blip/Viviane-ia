@@ -23,7 +23,7 @@ from core.skills.noticias import Noticias
 from core.skills.pc_control import ControladorPC
 from core.skills.sistema import InfoSistema
 from core.skills.wake_word import wake_word_manager
-from core.skills.web_search import buscar_web
+from core.skills.saber import saber
 from core.voice import GravadorVoz, falar
 
 log = logging.getLogger("Viviane")
@@ -123,11 +123,15 @@ class Assistente:
     def _falar_se_ativo(self, texto: str, *, falar_resposta: bool) -> None:
         if not texto or not falar_resposta:
             return
-        try:
-            falar(texto)
-            self._ultima_fala = time.time()
-        except Exception as e:
-            log.warning("Fala falhou: %s", e)
+
+        def _run() -> None:
+            try:
+                falar(texto)
+                self._ultima_fala = time.time()
+            except Exception as e:
+                log.warning("Fala falhou: %s", e)
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def _executar_comando(self, comando: str, *, falar_resposta: bool = True) -> str:
         try:
@@ -206,6 +210,7 @@ class Assistente:
             return "Desligando."
         if atalho.registrar:
             registrar("assistente", atalho.texto)
+        self._falar_se_ativo(atalho.texto, falar_resposta=falar_resposta)
         return atalho.texto
 
     def _processar_com_ia(self, comando: str, *, falar_resposta: bool = True) -> str:
@@ -241,19 +246,12 @@ class Assistente:
 
             if not resposta:
                 if self._parece_pergunta_conhecimento(comando):
-                    self._falar_se_ativo(
-                        f"Deixa eu pesquisar sobre {comando}.",
-                        falar_resposta=falar_resposta,
+                    resposta = saber(
+                        comando, self.conhecimento, self.cerebro, ctx.falar
                     )
-                    resultado_web = buscar_web(comando, num_resultados=3)
-                    if resultado_web and "Não encontrei" not in resultado_web:
-                        contexto_web = (
-                            f"\n[PESQUISA WEB EM TEMPO REAL]\n{resultado_web[:1500]}"
-                        )
-                        resposta = self.cerebro.processar(f"{comando}\n\n{contexto_web}")
-                        if resposta:
-                            registrar("assistente", resposta)
-                            return resposta
+                    if resposta:
+                        registrar("assistente", resposta)
+                        return resposta
                 comando_completo = f"{comando}\n\n{ctx_extra}" if ctx_extra else comando
                 resposta = self.cerebro.processar(comando_completo)
             if resposta:

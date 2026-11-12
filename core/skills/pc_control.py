@@ -242,13 +242,40 @@ class ControladorPC:
         return None
 
     # ── COMANDO GENERICO (PowerShell / CMD) ────────────────────────
+    def comando_valido(self, comando: str) -> bool:
+        """True se a primeira palavra for um comando real (cmdlet, alias, programa ou caminho)."""
+        texto = (comando or "").strip()
+        if not texto:
+            return False
+        if texto[0] in "&.$(@\"'" or "\\" in texto.split()[0] or "/" in texto.split()[0]:
+            return True
+        primeiro = texto.split()[0]
+        if not re.fullmatch(r"[A-Za-z0-9_.\-]+", primeiro):
+            return False
+        try:
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 f"if (Get-Command -Name '{primeiro}' -ErrorAction SilentlyContinue) {{ 'ok' }}"],
+                capture_output=True, text=True, timeout=10,
+                creationflags=_CREATE_NO_WINDOW,
+            )
+            return "ok" in (r.stdout or "")
+        except Exception:
+            return False
+
     def executar_comando(self, comando: str) -> str:
         """Executa qualquer comando no PowerShell e retorna a saida."""
         try:
+            preparado = (
+                "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; "
+                "$OutputEncoding=[System.Text.Encoding]::UTF8; " + comando
+            )
             resultado = subprocess.run(
-                ["powershell", "-Command", comando],
+                ["powershell", "-NoProfile", "-Command", preparado],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
                 creationflags=_CREATE_NO_WINDOW,
             )
