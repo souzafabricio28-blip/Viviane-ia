@@ -7,7 +7,7 @@ import time
 
 import psutil
 
-from core.actions.atalhos import resolver_atalho
+from core.actions.atalhos import eh_comando_parar, parar_tudo, resolver_atalho
 from core.actions.context import ActionContext
 from core.actions.dispatch import dispatch
 from core.conhecimento import BaseConhecimento
@@ -142,11 +142,9 @@ class Assistente:
             comando_processar = comando.lower().strip()
 
             # "PARE DE FALAR" deve executar ANTES de qualquer fala
-            if any(p in comando_processar for p in ("pare de falar", "cala a boca",
-                                                     "silêncio", "silenciar", "para de falar")):
-                from core.voice import parar_fala as pf
-                pf()
-                return "Falando parado."
+            if eh_comando_parar(comando_processar):
+                parar_tudo()
+                return "Parei de falar."
 
             if not comando_processar:
                 return self._oferecer_ajuda(falar_resposta=falar_resposta)
@@ -210,7 +208,8 @@ class Assistente:
             return "Desligando."
         if atalho.registrar:
             registrar("assistente", atalho.texto)
-        self._falar_se_ativo(atalho.texto, falar_resposta=falar_resposta)
+        if atalho.falar:
+            self._falar_se_ativo(atalho.texto, falar_resposta=falar_resposta)
         return atalho.texto
 
     def _processar_com_ia(self, comando: str, *, falar_resposta: bool = True) -> str:

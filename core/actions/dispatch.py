@@ -153,7 +153,7 @@ def _db_status(ctx: ActionContext) -> str:
 def _parar_fala(_ctx: ActionContext) -> str:
     from core.voice import parar_fala
     parar_fala()
-    return "Falando parado."
+    return "Parei de falar."
 
 
 def _salvar_conhecimento(ctx: ActionContext) -> str:

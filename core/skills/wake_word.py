@@ -382,6 +382,17 @@ class SimpleWakeWordDetector:
                         comando_lower = texto.lower().strip()
                         keyword = self.config.keyword.lower()
 
+                        # Enquanto ela fala, "pare" corta a fala sem precisar do "oi viviane"
+                        try:
+                            from core.actions.atalhos import eh_comando_parar
+                            from core.voice import esta_falando, parar_fala
+                            if esta_falando() and eh_comando_parar(comando_lower):
+                                log.info("Pedido de parar por voz: '%s'", texto)
+                                parar_fala()
+                                continue
+                        except Exception as exc:
+                            log.debug("Parar por voz falhou: %s", exc)
+
                         # Fuzzy matching para lidar com erros de transcrição
                         if self._keyword_match(keyword, comando_lower):
                             now = time.time()

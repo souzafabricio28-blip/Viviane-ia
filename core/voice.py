@@ -25,6 +25,8 @@ _stop_event = threading.Event()
 
 _current_proc = None
 _proc_lock = threading.Lock()
+_geracao = 0
+_falando = False
 
 RATE = 16000
 CHUNK = 1024
@@ -115,6 +117,8 @@ def _tocar_com_amplitude(texto: str, engine: str = "") -> None:
 
     def _amplitude_thread():
         for amp in envelope:
+            if _stop_event.is_set():
+                break
             set_amplitude(amp)
             time.sleep(intervalo)
         reset_amplitude()
@@ -124,21 +128,34 @@ def _tocar_com_amplitude(texto: str, engine: str = "") -> None:
 
     if engine == "edge" and _falar_via_edge(texto):
         return
+    if _stop_event.is_set():
+        return
     _falar_via_powershell(texto)
 
 
 def _tocar_mp3_windows(caminho: str) -> bool:
-    """Reproduz MP3 sem abrir janela. Devolve False se o áudio não tocar."""
+    """Reproduz MP3 sem abrir janela e obedece ao 'pare'. False se o áudio não tocar."""
     import ctypes
 
+    if _stop_event.is_set():
+        return True
     alias = f"viviane{int(time.time() * 1000)}"
     winmm = ctypes.windll.winmm
     abrir = winmm.mciSendStringW(f'open "{caminho}" type mpegvideo alias {alias}', None, 0, None)
     if abrir != 0:
         return False
     try:
-        tocou = winmm.mciSendStringW(f"play {alias} wait", None, 0, None)
-        return tocou == 0
+        if winmm.mciSendStringW(f"play {alias}", None, 0, None) != 0:
+            return False
+        estado = ctypes.create_unicode_buffer(32)
+        while True:
+            if _stop_event.is_set():
+                winmm.mciSendStringW(f"stop {alias}", None, 0, None)
+                return True
+            winmm.mciSendStringW(f"status {alias} mode", estado, 32, None)
+            if estado.value != "playing":
+                return True
+            time.sleep(0.04)
     finally:
         winmm.mciSendStringW(f"close {alias}", None, 0, None)
 
@@ -180,15 +197,25 @@ def _gerar_mp3_edge(texto: str, saida: str | None = None) -> str | None:
         if not os.path.exists(edge_tts_path):
             edge_tts_path = "edge-tts"
 
-        proc = _subprocess.run(
+        proc = _subprocess.Popen(
             [edge_tts_path, "--voice", settings.tts_voice,
              "--rate", settings.tts_rate,
              "--pitch", settings.tts_pitch,
              "--text", texto,
              "--write-media", destino],
-            capture_output=True, timeout=30,
+            stdout=_subprocess.DEVNULL, stderr=_subprocess.DEVNULL,
             creationflags=_CREATE_NO_WINDOW if sys.platform == "win32" else 0,
         )
+        limite = time.time() + 30
+        while proc.poll() is None:
+            if saida is not None and _stop_event.is_set():
+                proc.kill()  # "pare" durante a preparação do áudio
+                proc.wait(timeout=2)
+                break
+            if time.time() > limite:
+                proc.kill()
+                break
+            time.sleep(0.03)
         if proc.returncode != 0 or not os.path.exists(destino) or os.path.getsize(destino) == 0:
             if saida is None:
                 try:
@@ -244,17 +271,30 @@ def falar(texto: str) -> None:
     texto = _encurtar_para_fala(_limpar_texto_tts(texto))
     if not texto:
         return
+    global _falando
+    geracao = _geracao
     with _tts_lock:
+        if geracao != _geracao:
+            return  # alguém pediu "pare" enquanto esta fala esperava na fila
         try:
             _stop_event.clear()
+            _falando = True
             engine = settings.tts_engine
             _tocar_com_amplitude(texto, engine)
         except Exception as e:
             log.warning("Falha ao falar: %s", e)
             raise
+        finally:
+            _falando = False
+
+
+def esta_falando() -> bool:
+    return _falando
 
 
 def parar_fala() -> None:
+    global _geracao
+    _geracao += 1
     _stop_event.set()
     with _proc_lock:
         if _current_proc is not None and _current_proc.poll() is None:

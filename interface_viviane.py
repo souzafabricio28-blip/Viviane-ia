@@ -521,7 +521,7 @@ class VivianeApp(ctk.CTk):
         self.bind("<Control-Return>", lambda e: self.enviar_comando())
         self.bind("<Control-l>", lambda e: self._clear_chat())
         self.bind("<Control-s>", lambda e: self._open_settings())
-        self.bind("<Escape>", lambda e: self._clear_input())
+        self.bind("<Escape>", lambda e: self._escape())
 
         self._build_ui()
         self._set_status("Inicializando assistente...", self.colors["warn"])
@@ -652,7 +652,7 @@ class VivianeApp(ctk.CTk):
         self.voice_btn = ctk.CTkButton(
             rodape, text="◉  FALAR", height=40, corner_radius=0,
             fg_color="#06303C", hover_color="#0A4A5E", border_width=1, border_color=c["accent"],
-            text_color=c["accent"], font=_fonte(14, True), command=self.ouvir_microfone,
+            text_color=c["accent"], font=_fonte(14, True), command=self._voz_ou_parar,
         )
         self.voice_btn.pack(fill="x", pady=(0, 6))
         mini = ctk.CTkFrame(rodape, fg_color="transparent")
@@ -790,6 +790,9 @@ class VivianeApp(ctk.CTk):
         try:
             self.nucleo.avancar()
             self.hud.desenhar()
+            self._quadros = getattr(self, "_quadros", 0) + 1
+            if self._quadros % 6 == 0:
+                self._atualizar_botao_voz()
             self.after(45, self._animar_hud)
         except Exception:
             pass
@@ -865,6 +868,41 @@ class VivianeApp(ctk.CTk):
 
     def _clear_input(self) -> None:
         self._show_placeholder()
+
+    def _parar_fala(self) -> None:
+        try:
+            from core.actions.atalhos import parar_tudo
+            parar_tudo()
+        except Exception as exc:
+            _log_error(str(exc), "parar_fala")
+        self._atualizar_botao_voz()
+
+    def _escape(self) -> None:
+        if self._falando():
+            self._parar_fala()
+        else:
+            self._clear_input()
+
+    @staticmethod
+    def _falando() -> bool:
+        try:
+            from core.voice import esta_falando
+            return esta_falando()
+        except Exception:
+            return False
+
+    def _voz_ou_parar(self) -> None:
+        if self._falando():
+            self._parar_fala()
+        else:
+            self.ouvir_microfone()
+
+    def _atualizar_botao_voz(self) -> None:
+        if self._listening:
+            return
+        texto = "■  PARAR" if self._falando() else "◉  FALAR"
+        if self.voice_btn.cget("text") != texto:
+            self.voice_btn.configure(text=texto)
 
     def _quick_send(self, text: str) -> None:
         self.entry_box.configure(text_color=self.colors["text"])
@@ -958,7 +996,17 @@ class VivianeApp(ctk.CTk):
             return
         if texto is None:
             texto = self._entry_text()
-        if not texto or self._busy:
+        if not texto:
+            return
+
+        from core.actions.atalhos import eh_comando_parar
+        if eh_comando_parar(texto):
+            self._parar_fala()
+            self._clear_input()
+            self._add_message("Você", texto, is_user=True)
+            self._add_message("Sistema", "Parei de falar.")
+            return
+        if self._busy:
             return
 
         self._clear_input()
